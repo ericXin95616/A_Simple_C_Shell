@@ -9,19 +9,19 @@
 
 #define MAX_SIZE 512
 
-//char** generate_path_environ_var();
 bool parse_cmd(const char *cmd, char **args, int *argnum);
 bool check_validity_of_cmd(char **args, const int argnum);
 
 int main(int argc, char *argv[])
 {
-        char *cmd = malloc((MAX_SIZE)*sizeof(Byte)); // FREE
-        char **args = malloc(MAX_SIZE); // FREE
-        //char **envp = generate_path_environ_var(); // FREE
+        char *cmd = malloc(MAX_SIZE * sizeof(char)); // FREE
+        char **args = malloc(MAX_SIZE * sizeof(char*)); // FREE
+
         int argnum;
 
         do {
             printf("sshell$ ");
+
             size_t size = MAX_SIZE;
             __ssize_t charsnum = getline(&cmd, &size, stdin);
             if(charsnum == -1) // no input or error
@@ -38,42 +38,26 @@ int main(int argc, char *argv[])
             int status;
 
             if (pid == 0)
-                execvp(args[0], &args[1]);
+                execvp(args[0], &args[0]);
             else {
                 wait(&status);
                 fprintf(stderr, "Return status value for '%s': %d\n", cmd, WEXITSTATUS(status));
             }
+
+            for (int i = 0; i <= argnum ; ++i) {
+                free(args[i]);
+                args[i] = NULL; // seems redundant, delete and you screw everything!
+            }
+
         } while(true);
 
         free(cmd);
-
-        //free(envp[0]);
-        //free(envp);
-        int i = 0;
-        while(args[i]){
-            free(args[i]);
-            ++i;
-        }
         free(args);
 
         fprintf(stderr, "Bye...\n");
         return EXIT_SUCCESS;
 }
 
-/*
- * Generate an array of string for environment variable $PATH
- */
-/*
-char** generate_path_environ_var()
-{
-    char *tmp = getenv("PATH"); // FREE
-    char *path = malloc((strlen("PATH=") + strlen(tmp)) * 8); // FREE
-    sprintf(path, "PATH=%s", tmp);
-    char *envp[] = {path, NULL};
-    free(tmp);
-    return envp;
-}
- */
 /*
  * Parse the command line
  * Get all the arguments and the number of argument
@@ -83,18 +67,18 @@ char** generate_path_environ_var()
  */
 bool parse_cmd(const char *cmd, char **args, int *argnum)
 {
-    char *dupcmd = malloc(MAX_SIZE* sizeof(Byte)); // FREE
-    char *token;
+    char *dupcmd = malloc((strlen(cmd)+1) * sizeof(Byte)); // FREE
     char *saveptr;
     strcpy(dupcmd, cmd);
 
-    int i = 0;
-    for ( token = strtok_r(dupcmd, " ", &saveptr); token != NULL ; token = strtok_r(NULL, " ", &saveptr)) {
-        args[i] = token;
-        printf("Token %d: %s\n", i, token);
-        ++i;
+    (*argnum) = 0;
+    for (char *token = strtok_r(dupcmd, " ", &saveptr); token != NULL ; token = strtok_r(NULL, " ", &saveptr)) {
+        args[*argnum] = malloc((strlen(token)+1)* sizeof(char));
+        strcpy(args[*argnum], token);
+        ++(*argnum);
     }
 
+    free(dupcmd);
     if(!strcmp(args[0], "exit"))
         return false;
     return true;
