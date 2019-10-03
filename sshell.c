@@ -6,89 +6,158 @@
 #include <errno.h>
 #include <stdbool.h>
 #include <unistd.h>
+#include <assert.h>
 
 #define MAX_SIZE 512
 
-bool parse_cmd(const char *cmd, char **args, int *argnum);
-bool check_validity_of_cmd(char **args, const int argnum);
+enum {
+    TOO_MANY_ARGS;
+    NO_DIR; // EXEC
+    NO_CMD; // EXEC
+    MISSING_CMD;
+    MISLOCATE_INPUT;
+    NO_INPUT_FILE;
+    CANT_OPEN_INPUT_FILE;
+    MISTLOCATE_OUTPUT;
+    NO_OUTPUT_FILE;
+    CANT_OPEN_OUTPUT_FILE;
+    MISLOCATE_BACKGROUND_SIGN;
+    ACTIVE_JOBS_NOT_FINISH; //EXEC
+};
+
+typedef struct command {
+    char **args; //array of argument, args[0] is filename
+    char *inputfile;
+    char *outputfile;
+    int argnum;
+    int ordernum;
+    int totalcmd;
+} singalcmd;
+
+/*
+ * Free memory allocate for each singalcmd object
+ */
+void _myfree(singalcmd cmd) {
+    if(cmd.inputfile)
+        free(cmd.inputfile);
+    if(cmd.outputfile)
+        free(cmd.inputfile);
+
+    assert(cmd.args);
+    if(cmd.args) {
+        int i = 0;
+        while(cmd.args[i]){
+            free(cmd.args[i]);
+            ++i;
+        }
+    }
+    free(cmd.args);
+}
+
+/*
+ * Free memory allocate for an array of singalcmd
+ * singalcmd **cmds? Care of Memory issue!
+ */
+void myfree(singalcmd *cmds, int cmdnum) {
+    for (int i = 0; i < cmdnum; ++i)
+        _myfree(cmds[i]);
+    free(cmds);
+}
+
+/*
+ * This function is for build and check
+ * initialize singal command
+ * If input command string is not valid,
+ * we output error message.
+ */
+bool initialize_singal_command(singalcmd *cmd, int ordernum, int totalnum) {
+
+}
+
+/*
+ * Parse the source string
+ * If source string is invalid,
+ * we print error message and return false.
+ * If source string is vaild,
+ * we divide it into different commands and
+ * call initialize_singal_command function to
+ * build cmds
+ */
+bool parse_src_string(const char *src, singalcmd *cmds, int *cmdnum)
+{
+    char *dupcmd = malloc((strlen(src)+1) * sizeof(char));
+    char *delimiters = "|";
+    char *saveptr;
+    char **tmp = malloc(strlen(src) * sizeof(char*));
+    strcpy(dupcmd, src);
+
+    (*cmdnum) = 0;
+    for (char *token = strtok_r(dupcmd, delimiters, &saveptr); token != NULL ; token = strtok_r(NULL, delimiters, &saveptr)) {
+        tmp[(*cmdnum)] = token;
+        ++(*cmdnum);
+    }
+
+    cmds = malloc((*cmdnum) * sizeof(singalcmd));
+    for (int i = 0; i < *cmdnum; ++i) {
+        if(initialize_singal_command(&cmds[i], i, *cmdnum)) {
+            myfree(cmds, *cmdnum);
+            free(dupcmd);
+            return false;
+        }
+    }
+
+    free(dupcmd);
+    return true;
+}
 
 int main(int argc, char *argv[])
 {
-        char *cmd = malloc(MAX_SIZE * sizeof(char)); // FREE
-        char **args = malloc(MAX_SIZE * sizeof(char*)); // FREE
+    char *src = malloc(MAX_SIZE * sizeof(char)); // FREE
+    //char **args = malloc(MAX_SIZE * sizeof(char*)); // FREE
 
-        int argnum;
+    singalcmd *cmds = NULL;
+    int cmdnum;
 
-        do {
-            printf("sshell$ ");
+    do {
+        printf("sshell$ ");
 
-            size_t size = MAX_SIZE;
-            __ssize_t charsnum = getline(&cmd, &size, stdin);
-            if(charsnum == -1) // no input or error
-                continue;
-            cmd[charsnum-1] = '\0'; // delete trailing newline char
+        size_t size = MAX_SIZE;
+        __ssize_t charsnum = getline(&src, &size, stdin);
+        if(charsnum == -1) // no input or error
+            continue;
+        src[charsnum-1] = '\0'; // delete trailing newline char
 
-            if(!parse_cmd(cmd, args, &argnum))
-                break;
+        if(!parse_src_string(src, cmds, &cmdnum))
+            continue;
 
-            if(!check_validity_of_cmd(args, argnum))
-                continue;
+        assert(cmds);
+        for (int i = 0; i < cmdnum; ++i) {
+            if(strcmp(cmds[i].args[0], "exit") == 0)
+                goto label;
 
             int pid = fork();
             int status;
 
             if (pid == 0)
-                execvp(args[0], &args[0]);
+                execvp(cmds[i].args[0], cmds[i].args);
             else {
                 wait(&status);
-                fprintf(stderr, "Return status value for '%s': %d\n", cmd, WEXITSTATUS(status));
+                fprintf(stderr, "Return status value for '%s': %d\n", src, WEXITSTATUS(status));
             }
+        }
+        myfree(cmds, cmdnum);
+        continue;
+        /*
+         * I know it is ugly.
+         * Laugh me if you have better solution. :)
+         */
+        label:
+            myfree(cmds, cmdnum);
+            break;
+    } while(true);
 
-            for (int i = 0; i <= argnum ; ++i) {
-                free(args[i]);
-                args[i] = NULL; // seems redundant, delete and you screw everything!
-            }
+    free(src);
 
-        } while(true);
-
-        free(cmd);
-        free(args);
-
-        fprintf(stderr, "Bye...\n");
-        return EXIT_SUCCESS;
-}
-
-/*
- * Parse the command line
- * Get all the arguments and the number of argument
- * Note that args[0] is not the argument but program
- * name we need to find and exec
- * Returns false if and only if args[0] == "exit"
- */
-bool parse_cmd(const char *cmd, char **args, int *argnum)
-{
-    char *dupcmd = malloc((strlen(cmd)+1) * sizeof(Byte)); // FREE
-    char *saveptr;
-    strcpy(dupcmd, cmd);
-
-    (*argnum) = 0;
-    for (char *token = strtok_r(dupcmd, " ", &saveptr); token != NULL ; token = strtok_r(NULL, " ", &saveptr)) {
-        args[*argnum] = malloc((strlen(token)+1)* sizeof(char));
-        strcpy(args[*argnum], token);
-        ++(*argnum);
-    }
-
-    free(dupcmd);
-    if(!strcmp(args[0], "exit"))
-        return false;
-    return true;
-}
-
-/*
- * Return true if cmd is vaild / false if cmd is invalid
- * And print corresponding error messages into stderr
- */
-bool check_validity_of_cmd(char **args, const int argnum)
-{
-    return true;
+    fprintf(stderr, "Bye...\n");
+    return EXIT_SUCCESS;
 }
