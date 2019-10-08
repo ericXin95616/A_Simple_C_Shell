@@ -9,6 +9,8 @@
 #include <assert.h>
 #include <ctype.h>
 #include <libgen.h>
+#include <fcntl.h>
+// #include <stdbool.h>
 #include "phrasor.h"
 
 #define MAX_SIZE 512
@@ -48,7 +50,7 @@ char * get_dest_dir(char *destDir, const char *filename){
     } else if(filename[0] == '.') {
         strcat(destDir, &filename[1]);
     } else {
-        strcat(destDir, "/");
+        strcat(destDir, "/"); /* does mac work for this path?*/
         strcat(destDir, filename);
     }
     return  destDir;
@@ -58,6 +60,7 @@ char * get_dest_dir(char *destDir, const char *filename){
  * first call get_dest_dir to get absolute path
  * and chdir. Remember to free destDir!
  */
+/* to do: just cd */
 void execute_cd(command *cmd) {
     // args[0] is "cd", args[1] should be filename
     char *destDir = NULL;
@@ -119,7 +122,7 @@ void execute_commands(command *header, char *src) {
  */
 bool readline(char *src) {
     size_t size = MAX_SIZE;
-    __ssize_t charsnum = getline(&src, &size, stdin);
+    ssize_t charsnum = getline(&src, &size, stdin);
     // no input or error
     if(charsnum <= 1)
         return false;
@@ -141,14 +144,63 @@ void output(const char *src, const command *header) {
     fprintf(stderr, "\n");
 }
 
+/*
+ * set io redirection before execute
+ * maybe fflush out the original stdout before dup2
+ * check inputfile and outputfile string is null
+ */
+
+void set_io_redirection(const command *header, int * inputfd, int * outputfd) {
+    if (header->inputfile != NULL) {
+        if ((*inputfd = open(header->inputfile, O_RDWR, 0644)) < 0) {
+            perror("open input file error");	/* open failed */
+            exit(1);
+        }
+        dup2(*inputfd, 0); 
+    }
+    if (header->outputfile != NULL) {
+        if ((*outputfd = open(header->outputfile, O_RDWR, 0644)) < 0) {
+            perror("open output file error");	/* open failed */
+            exit(1);
+        }
+        dup2(*outputfd, 1);
+    }
+    // printf("%d\n", *inputfd);
+    // printf("%d", *outputfd);
+    // if (*hasif)
+    //     printf("has if\n");
+    // if (*hasof)
+    //     printf("has of\n");
+}
+
+void close_io_files(const int inputfd, const int outputfd, const int savedstdin, const int savedstdout) {
+    if (inputfd != -1) {
+        close(inputfd);
+        dup2(savedstdin, 0);
+    }
+    if (outputfd != -1) {
+        close(outputfd);
+        dup2(savedstdout, 1);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     char *src = malloc(MAX_SIZE * sizeof(char)); // FREE
     command *header = NULL;
+    int inputfd;	/* new file descriptor */
+    int outputfd;	/* new file descriptor */
+    int savedstdin = dup(0);
+    int savedstdout = dup(1);
 
     // this loop only exit if command is "exit"
     do {
         printf("sshell$ ");
+
+
+        inputfd = -1;
+        outputfd = -1;
+
 
         if(!readline(src))
             continue;
@@ -156,11 +208,15 @@ int main(int argc, char *argv[])
         if(!parse_src_string(src, &header))
             continue;
 
+
+        set_io_redirection(header, &inputfd, &outputfd);
+
         //if command is "exit", it will exit from this function
         execute_commands(header, NULL);
 
         output(src, header);
         myfree(header);
         header = NULL;
+        close_io_files(inputfd, outputfd, savedstdin, savedstdout);
     } while(true);
 }
