@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 700
 #include <stdlib.h>
 #include <stdio.h>
 #include <zconf.h>
@@ -75,6 +76,23 @@ void execute_cd(command *cmd) {
     cmd->status = 1; // set status to 1 indicates error
 }
 
+void launch_new_process(command *iter) {
+    if(iter->inputfd != -1) {
+        dup2(iter->inputfd, STDIN_FILENO);
+        close(iter->inputfd);
+    }
+
+    if(iter->outputfd != -1) {
+        dup2(iter->outputfd, STDOUT_FILENO);
+        close(iter->outputfd);
+    }
+
+    if(execvp(iter->args[0], iter->args) == -1){
+        fprintf(stderr, "Error: command not found\n");
+        iter->status = 1;
+        exit(EXIT_FAILURE);
+    }
+}
 /*
  * Execute commands stored in linked list header
  * For every command, we first exam whether it is bulletin command
@@ -83,6 +101,7 @@ void execute_cd(command *cmd) {
  * Notice that when command is exit, we need to free memory and exit right away!
  */
 void execute_commands(command *header, char *src) {
+    int fd[2];
     for (command *iter = header; iter != NULL; iter = iter->next) {
         if(strcmp(iter->args[0], "exit") == 0) {
             free(header);
@@ -97,19 +116,28 @@ void execute_commands(command *header, char *src) {
             continue;
         }
 
+        //check if pipeline
+        if(iter->next) {
+            pipe(fd);
+            iter->outputfd = fd[1];
+            iter->next->inputfd = fd[0];
+        }
+
         int status;
         int pid = fork();
 
         if (pid == 0) {
-            if(execvp(iter->args[0], iter->args) == -1){
-                fprintf(stderr, "Error: command not found\n");
-                iter->status = 1;
-                exit(EXIT_FAILURE);
-            }
+            launch_new_process(iter);
         } else if(pid > 0){
             wait(&status);
             iter->status = status;
         }
+
+        // close any inputfd or outputfd
+        if(iter->inputfd != -1)
+            close(iter->inputfd);
+        if(iter->outputfd != -1)
+            close(iter->outputfd);
     }
 
 }
@@ -119,7 +147,7 @@ void execute_commands(command *header, char *src) {
  */
 bool readline(char *src) {
     size_t size = MAX_SIZE;
-    __ssize_t charsnum = getline(&src, &size, stdin);
+    size_t charsnum = getline(&src, &size, stdin);
     // no input or error
     if(charsnum <= 1)
         return false;
@@ -157,7 +185,7 @@ int main(int argc, char *argv[])
             continue;
 
         //if command is "exit", it will exit from this function
-        execute_commands(header, NULL);
+        execute_commands(header, src);
 
         output(src, header);
         myfree(header);

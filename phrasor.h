@@ -10,11 +10,11 @@
 
 typedef struct command {
     char **args; //array of argument, args[0] is filename
-    char *inputfile;
-    char *outputfile;
+    int inputfd;
+    int outputfd;
     bool background;
     struct command *prev;
-    struct command * next;
+    struct command *next;
     int status;
 } command;
 

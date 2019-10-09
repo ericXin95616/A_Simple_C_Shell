@@ -7,6 +7,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <stdio.h>
+#include <fcntl.h>
 #include "phrasor.h"
 
 
@@ -15,11 +16,6 @@
  * remember to free itself!
  */
 void _myfree(command *cmd) {
-    if(cmd->inputfile)
-        free(cmd->inputfile);
-    if(cmd->outputfile)
-        free(cmd->outputfile);
-
     assert(cmd->args);
     if(cmd->args) {
         int i = 0;
@@ -64,39 +60,28 @@ bool ischar(const char a, const char * list)
  * initialize a new command node and linked it to the linked list
  * remember to free args[i]! Otherwise, we cannot construct next command
  */
-void initialize_command(command **header, char **args, char *inputfile, char *outputfile, bool background, command *prev,
+command* initialize_command(command *header, char **args, int inputfd, int outputfd, bool background, command *prev,
                         command *next)
 {
-    (*header) = malloc(sizeof(command));
-    (*header)->background = background;
-    (*header)->prev = prev;
-    (*header)->next = next;
-    (*header)->status = -1; // use -1 indicate this value has not been modified
-
-    if(!strlen(inputfile)){
-        (*header)->inputfile = NULL;
-    } else {
-        (*header)->inputfile = malloc((strlen(inputfile) + 1) * sizeof(char));
-        strcpy((*header)->inputfile, inputfile);
-    }
-
-    if(!strlen(outputfile)){
-        (*header)->outputfile = NULL;
-    } else {
-        (*header)->outputfile = malloc((strlen(outputfile) + 1) * sizeof(char));
-        strcpy((*header)->outputfile, outputfile);
-    }
+    header = malloc(sizeof(command));
+    header->background = background;
+    header->prev = prev;
+    header->next = next;
+    header->status = -1; // use -1 indicate this value has not been modified
+    header->inputfd = inputfd;
+    header->outputfd = outputfd;
 
     int argnum = 0;
     while (args[argnum]) ++argnum;
-    (*header)->args = malloc((argnum+1) * sizeof(char*));
+    header->args = malloc((argnum+1) * sizeof(char*));
     for (int i = 0; i < argnum; ++i) {
-        (*header)->args[i] = malloc((strlen(args[i]) + 1) * sizeof(char));
-        strcpy((*header)->args[i], args[i]);
+        header->args[i] = malloc((strlen(args[i]) + 1) * sizeof(char));
+        strcpy(header->args[i], args[i]);
         free(args[i]);
         args[i] = NULL;
     }
-    (*header)->args[argnum] = NULL;
+    header->args[argnum] = NULL;
+    return header;
 }
 
 int get_next_nonspace_char_pos(const char *src, int index)
@@ -141,15 +126,13 @@ bool check_ampersand(const char *src, int index)
  * Therefore, no need to free header.
  * If not, we need to free it and set it back to NULL
  */
-void clear_mem(char **args, char *inputfile, char *outputfile, char *token, command **header) {
+void clear_mem(char **args, char *token, command **header) {
     int argnum = 0;
     while(args[argnum]){
         free(args[argnum]);
         ++argnum;
     }
     free(args);
-    free(inputfile);
-    free(outputfile);
     free(token);
     if(header) {
         myfree(*header);
@@ -214,7 +197,10 @@ char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
  * we also need to use fopen() to see if we have
  * access to that file
  */
-bool check_redirect_sign(command **header, const char *cmd, char *token, const char *delimiters, int *index, char special) {
+bool
+check_redirect_sign(command **header, const char *cmd, char *token, const char *delimiters,
+                    int *index, char special, int *fd)
+{
     assert(special == '<' || special == '>');
     ++(*index);
     char nextSpecial = my_strtok(cmd, token, delimiters, index);
@@ -249,18 +235,27 @@ bool check_redirect_sign(command **header, const char *cmd, char *token, const c
         return false;
     }
 
-    // Cannot open file
-    if(special == '<' && !fopen(token, "r")) {
-        fprintf(stderr, "Error: cannot open input file\n");
-        return false;
+    // Check to see if we can open the file
+    int _fd;
+    if(special == '<') {
+        _fd = open(token, O_RDONLY, 0644);
+        if(_fd == -1) {
+            fprintf(stderr, "Error: cannot open input file\n");
+            return false;
+        } else {
+            *fd = _fd;
+            return true;
+        }
     }
-
-    if(special == '>' && !fopen(token, "w")) {
+    // when special == '>'
+    _fd = open(token, O_RDWR | O_TRUNC | O_CREAT, 0644);
+    if(_fd == -1) {
         fprintf(stderr, "Error: cannot open output file\n");
         return false;
+    } else {
+        *fd = _fd;
+        return true;
     }
-
-    return true;
 }
 
 /*
@@ -270,15 +265,17 @@ bool check_redirect_sign(command **header, const char *cmd, char *token, const c
  * Notice that index is updated in check function!
  */
 bool handle_redirect_sign(command **header, const char *cmd, char *token, char special, const char *delimiters,
-                          int *index, char *inputfile, char *outputfile)
+                          int *index, int *inputfd, int *outputfd)
 {
-    if(!check_redirect_sign(header, cmd, token, delimiters, index, special))
+    //-1 indicates no file descriptor
+    int fd = -1;
+    if(!check_redirect_sign(header, cmd, token, delimiters, index, special, &fd))
         return false;
 
     if(special == '<')
-        strcpy(inputfile, token);
+        *inputfd = fd;
     else
-        strcpy(outputfile, token);
+        *outputfd = fd;
     token[0] = '\0';
     return true;
 }
@@ -291,19 +288,23 @@ bool handle_redirect_sign(command **header, const char *cmd, char *token, char s
  * No need to update index, because there is nothing left in cmd
  */
 bool handle_ampersand(command **header, command **iter, const char *cmd, char **args,
-                      char *inputfile, char *outputfile, int index)
+                      int *inputfd, int *outputfd, int index)
 {
     if(!check_ampersand(cmd, index))
         return false;
 
     //First command and only one command!
     if(!(*header)) {
-        initialize_command(header, args, inputfile, outputfile, true, NULL, NULL);
+        *header = initialize_command(*header, args, *inputfd, *outputfd, true, NULL, NULL);
+        *iter = *header;
     } else {
         assert(!(*iter)->next);
-        initialize_command(&((*iter)->next), args, inputfile, outputfile, true, *iter, NULL);
+        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, true, *iter, NULL);
         *iter = (*iter)->next; // problem here?
     }
+    //set them back to initial value
+    *inputfd = -1;
+    *outputfd = -1;
     return true;
 }
 
@@ -315,20 +316,24 @@ bool handle_ampersand(command **header, command **iter, const char *cmd, char **
  * update index, so that we will begin construct next command
  */
 bool handle_vertical_bar_and_null(command **header, command **iter, const char *cmd,
-                                  char **args, char *inputfile, char *outputfile, int *index)
+                                  char **args, int *inputfd, int *outputfd, int *index)
 {
     if(cmd[*index] != '\0' && !check_vertical_bar(cmd, *index))
         return false;
 
     //First command, but we dont know if it is the only one
     if(!(*header)) {
-        initialize_command(header, args, inputfile, outputfile, false, NULL, NULL);
+        *header = initialize_command(*header, args, *inputfd, *outputfd, false, NULL, NULL);
+        *iter = *header;
     } else {
         assert(!(*iter)->next);
-        initialize_command(&((*iter)->next), args, inputfile, outputfile, false, *iter, NULL);
-        *iter = (*iter)->next; // problem here?
+        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, false, *iter, NULL);
+        *iter = (*iter)->next;
     }
     ++(*index);
+    // set them back to initial value
+    *inputfd = -1;
+    *outputfd = -1;
     return true;
 }
 
@@ -344,13 +349,12 @@ bool parse_src_string(const char *cmd, command **header) {
     char *delimiters = "|&<>";
     int mallocSize = (int)strlen(cmd) * sizeof(char);
     char *token = malloc(mallocSize);
-    char *inputfile = malloc(mallocSize);
-    char *outputfile = malloc(mallocSize);
+    //input/output file descriptor, -1 indicates NULL file descriptor
+    int inputfd = -1;
+    int outputfd = -1;
 
     // set allocated memory back to 0
     memset(token, 0, mallocSize);
-    memset(inputfile, 0, mallocSize);
-    memset(outputfile, 0, mallocSize);
 
     // args should be a NULL-terminated array of strings
     char **args = malloc((MAX_ARGUMENT_NUM + 1) * sizeof(char*));
@@ -361,14 +365,14 @@ bool parse_src_string(const char *cmd, command **header) {
      * iter indicates the last element in linked list,
      * convenient for us to insert new element.
      */
-    command **iter = header;
+    command *iter;
     while(index <= strlen(cmd)) {
         // src[index] == special, take next token
         char special = my_strtok(cmd, token, delimiters, &index);
 
         if(!write_back(args, token)){
             fprintf(stderr, "Error: too many process arguments\n");
-            clear_mem(args, inputfile, outputfile, token, header);
+            clear_mem(args, token, header);
             return false;
         }
 
@@ -385,30 +389,30 @@ bool parse_src_string(const char *cmd, command **header) {
          */
         if(!args[0]) {
             fprintf(stderr, "Error: missing command\n");
-            clear_mem(args, inputfile, outputfile, token, header);
+            clear_mem(args, token, header);
             return false;
         }
 
         // depends on different delimiters, we take different actions
         if(special == '<' || special == '>') {
-            if (!handle_redirect_sign(header, cmd, token, special, delimiters, &index, inputfile, outputfile)){
-                clear_mem(args, inputfile, outputfile, token, header);
+            if (!handle_redirect_sign(header, cmd, token, special, delimiters, &index, &inputfd, &outputfd)){
+                clear_mem(args, token, header);
                 return false;
             }
         } else if(special == '&') {
-            if(!handle_ampersand(header, iter, cmd, args, inputfile, outputfile, index)){
-                clear_mem(args, inputfile, outputfile, token, header);
+            if(!handle_ampersand(header, &iter, cmd, args, &inputfd, &outputfd, index)){
+                clear_mem(args, token, header);
                 return false;
             }
         } else if(special == '|' || special == '\0') {
-            if(!handle_vertical_bar_and_null(header, iter, cmd, args, inputfile, outputfile, &index)) {
-                clear_mem(args, inputfile, outputfile, token, header);
+            if(!handle_vertical_bar_and_null(header, &iter, cmd, args, &inputfd, &outputfd, &index)) {
+                clear_mem(args, token, header);
                 return false;
             }
         }
     }
 
     // success, no need to free header
-    clear_mem(args, inputfile, outputfile, token, NULL);
+    clear_mem(args, token, NULL);
     return true;
 }
