@@ -23,11 +23,13 @@ void execute_pwd(command *cmd) {
     char *currentDir = NULL;
     currentDir = getcwd(currentDir, MAX_SIZE * sizeof(char));
 
-    cmd->status = (currentDir == NULL);
     if(currentDir) {
         printf("%s\n", currentDir);
         free(currentDir);
+        return;
     }
+    //if getcwd fail, we set status 256 so that WEXITSTATUS(status) == 1
+    cmd->status = 256;
 }
 
 /*
@@ -73,7 +75,7 @@ void execute_cd(command *cmd) {
     }
     // returnVal -1 if fail
     fprintf(stderr, "Error: no such directory\n");
-    cmd->status = 1; // set status to 1 indicates error
+    cmd->status = 256; // set status to 256, so that WEXITSTATUS(status) will return 1
 }
 
 void launch_new_process(command *iter) {
@@ -87,35 +89,55 @@ void launch_new_process(command *iter) {
         close(iter->outputfd);
     }
 
-    if(execvp(iter->args[0], iter->args) == -1){
-        fprintf(stderr, "Error: command not found\n");
-        iter->status = 1;
-        exit(EXIT_FAILURE);
+    execvp(iter->args[0], iter->args);
+    fprintf(stderr, "Error: command not found\n");
+    exit(EXIT_FAILURE);
+}
+
+/*
+ * buildin commands will not be called as background commands
+ * Neither will they be a part of pipeline commands
+ * So we handle them first
+ */
+bool execute_buildin_commands(command *header, char *src) {
+    if(strcmp(header->args[0], "exit") == 0) {
+        free(header);
+        free(src);
+        fprintf(stderr, "Bye...\n");
+        exit(EXIT_SUCCESS);
     }
+
+    if (strcmp(header->args[0], "cd") == 0) {
+        execute_cd(header);
+        return true;
+    }
+
+    if (strcmp(header->args[0], "pwd") == 0) {
+        execute_pwd(header);
+        return true;
+    }
+
+    return false;
 }
 /*
  * Execute commands stored in linked list header
  * For every command, we first exam whether it is bulletin command
- * If it is, execute them accordingly.
+ * If it is, execute them and return, because we can assume bullet command will not in pipeline.
  * If it is not, call execvp to execute them.
  * Notice that when command is exit, we need to free memory and exit right away!
  */
 void execute_commands(command *header, char *src) {
-    int fd[2];
-    for (command *iter = header; iter != NULL; iter = iter->next) {
-        if(strcmp(iter->args[0], "exit") == 0) {
-            free(header);
-            free(src);
-            fprintf(stderr, "Bye...\n");
-            exit(EXIT_SUCCESS);
-        } else if (strcmp(iter->args[0], "cd") == 0) {
-            execute_cd(iter);
-            continue;
-        } else if (strcmp(iter->args[0], "pwd") == 0) {
-            execute_pwd(iter);
-            continue;
-        }
+    if(execute_buildin_commands(header, src))
+        return;
 
+    int fd[2];
+
+    //check if the job need to be put in the background
+    command *iter = header;
+    while(iter->next) iter = iter->next;
+    bool background = iter->background;
+
+    for (iter = header; iter != NULL; iter = iter->next) {
         //check if pipeline
         if(iter->next) {
             pipe(fd);
@@ -132,7 +154,6 @@ void execute_commands(command *header, char *src) {
             wait(&status);
             iter->status = status;
         }
-
         // close any inputfd or outputfd
         if(iter->inputfd != -1)
             close(iter->inputfd);
@@ -148,6 +169,11 @@ void execute_commands(command *header, char *src) {
 bool readline(char *src) {
     size_t size = MAX_SIZE;
     size_t charsnum = getline(&src, &size, stdin);
+    // TODO: delete this code before handin
+    if (!isatty(STDIN_FILENO)) {
+        printf("%s", src);
+        fflush(stdout);
+    }
     // no input or error
     if(charsnum <= 1)
         return false;
@@ -164,7 +190,7 @@ bool readline(char *src) {
 void output(const char *src, const command *header) {
     fprintf(stderr, "+ completed '%s' ", src);
     for (const command *it = header; it != NULL ; it = it->next) {
-        fprintf(stderr, "[%d]", it->status);
+        fprintf(stderr, "[%d]", WEXITSTATUS(it->status));
     }
     fprintf(stderr, "\n");
 }
