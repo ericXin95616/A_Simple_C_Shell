@@ -150,7 +150,7 @@ bool execute_buildin_commands(job *first_job) {
 void wait_handler(job *first_job, command *currentCmd) {
     int returnVal;
     int status = 0;
-    if(!(first_job->background))
+    if(first_job->background)
         returnVal = waitpid(currentCmd->pid, &status, WNOHANG);
     else
         returnVal = waitpid(currentCmd->pid, &status, 0);
@@ -250,7 +250,8 @@ job* output_finished_job(job* first_job) {
         output(it->src, it->cmd);
         //reconstruct linked list. tail->next == it
         tail->next = it->next;
-        it->next->prev = tail;
+        if(it->next)
+            it->next->prev = tail;
         myfree(it);
     }
 
@@ -295,9 +296,9 @@ void check_background_job(job *first_job) {
     int status;
     do{
         terminatedChildPid = waitpid(-1, &status, WNOHANG);
-        if(terminatedChildPid != 0)
+        if(terminatedChildPid > 0)
             check_if_job_finished(first_job, terminatedChildPid, status);
-    }while(terminatedChildPid != 0);
+    }while(terminatedChildPid > 0);
 }
 
 int main(int argc, char *argv[])
@@ -306,6 +307,7 @@ int main(int argc, char *argv[])
 
     // this loop only exit if command is "exit"
     do {
+        check_background_job(first_job);
         first_job = output_finished_job(first_job);
 
         char *src = malloc(MAX_SIZE * sizeof(char));
@@ -314,7 +316,6 @@ int main(int argc, char *argv[])
         if(!readline(src))
             continue;
 
-        check_background_job(first_job);
         //we first build next job from command line
         //and insert it as the first element in the linked list
         job *next_job = NULL;
