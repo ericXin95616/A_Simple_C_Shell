@@ -1,4 +1,4 @@
-# ECS150 Project 2 Report
+# ECS150 Project 1 Report
 
 ## Phase 1
   + We implement the fork+exec+wait structure to run the commands the hard way.
@@ -174,5 +174,5 @@ void execute_pwd(job *first_job) {
     first_job->cmd->status = 256;
 }
   ```
-  
+
 
