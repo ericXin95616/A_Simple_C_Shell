@@ -375,6 +375,7 @@ char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
     dest[destIndex] = '\0';
     return src[*index];
 }
+  ```
 
 ## Phrase 7
   + We implement it by *handle_vertical_bar_and_null* to read and __pipe__
