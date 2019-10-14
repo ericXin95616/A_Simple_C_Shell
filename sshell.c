@@ -13,6 +13,8 @@
 #include "parsor.h"
 
 #define MAX_SIZE 512
+#define BUILDIN_FAILURE 256
+#define BUILDIN_SUCCESS 0
 
 /*
  * call getcwd to get current working directory
@@ -26,12 +28,12 @@ void execute_pwd(job *first_job) {
 
     if(currentDir) {
         printf("%s\n", currentDir);
-        first_job->cmd->status = 0;
+        first_job->cmd->status = BUILDIN_SUCCESS;
         free(currentDir);
         return;
     }
     //if getcwd fail, we set status 256 so that WEXITSTATUS(status) == 1
-    first_job->cmd->status = 256;
+    first_job->cmd->status = BUILDIN_SUCCESS;
 }
 
 /*
@@ -73,12 +75,12 @@ void execute_cd(job *first_job) {
     free(destDir);
     // 0 indicates success
     if(!returnVal) {
-        first_job->cmd->status = returnVal;
+        first_job->cmd->status = BUILDIN_SUCCESS;
         return;
     }
     // returnVal -1 if fail
     fprintf(stderr, "Error: no such directory\n");
-    first_job->cmd->status = 256; // set status to 256, so that WEXITSTATUS(status) will return 1
+    first_job->cmd->status = BUILDIN_FAILURE; // set status to 256, so that WEXITSTATUS(status) will return 1
 }
 
 /*
@@ -89,7 +91,7 @@ void execute_cd(job *first_job) {
 void execute_exit(job *first_job) {
     first_job->cmd->finished = true;
     if(first_job->next) {
-        first_job->cmd->status = 256;
+        first_job->cmd->status = BUILDIN_FAILURE;
         printf("Error: active jobs still running\n");
         return;
     }
