@@ -19,6 +19,7 @@ command *initialize_command(command *header, char **args, int inputfd, int outpu
     header->status = -1; // use -1 indicate this value has not been modified
     header->inputfd = inputfd;
     header->outputfd = outputfd;
+    header->finished = false;
     header->pid = -1; //-1 indicates this process has not been issued
 
     int argnum = 0;

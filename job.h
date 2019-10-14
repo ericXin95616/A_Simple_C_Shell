@@ -13,6 +13,7 @@ typedef struct command {
     struct command *next;
     int status;
     int pid;
+    bool finished;
 } command;
 
 typedef struct job {

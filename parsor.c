@@ -150,6 +150,16 @@ bool check_redirect_sign(command **header, const char *cmd, char *token, const c
     // if nextSpecial is space, we want to find next delimiter
     while(isspace(nextSpecial))
         nextSpecial = cmd[++(*index)];
+
+    // No filename
+    if(!strlen(token)) {
+        if(special == '<')
+            fprintf(stderr, "Error: no input file\n");
+        else
+            fprintf(stderr, "Error: no output file\n");
+        return false;
+    }
+
     // check mislocated error
     if(nextSpecial == '|' && *header) { //command in middle
         if(special == '<')
@@ -166,15 +176,6 @@ bool check_redirect_sign(command **header, const char *cmd, char *token, const c
 
     if(nextSpecial == '\0' && *header && special == '<') { // last command in many command
         fprintf(stderr, "Error: mislocated input redirection\n");
-        return false;
-    }
-
-    // No filename
-    if(!strlen(token)) {
-        if(special == '<')
-            fprintf(stderr, "Error: no input file\n");
-        else
-            fprintf(stderr, "Error: no output file\n");
         return false;
     }
 

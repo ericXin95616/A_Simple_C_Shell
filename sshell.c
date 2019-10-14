@@ -144,8 +144,8 @@ bool execute_buildin_commands(job *first_job) {
  * to tell parent process not wait for that new process.
  * If the job is a foreground job, we do not use WNOHANG
  * If the pid return from waitpid is equal to child's pid,
- * it means that child finish, we therefore check
- * if that means we finished the job.
+ * it means that child finish, we therefore set the finished
+ * flag of command to true.
  */
 void wait_handler(job *first_job, command *currentCmd) {
     int returnVal;
@@ -154,10 +154,11 @@ void wait_handler(job *first_job, command *currentCmd) {
         returnVal = waitpid(currentCmd->pid, &status, WNOHANG);
     else
         returnVal = waitpid(currentCmd->pid, &status, 0);
-    currentCmd->status = status;
-    //check if currentCmd is the last cmd of first_job
-    if(returnVal == currentCmd->pid)
-        first_job->finished = (currentCmd->next == NULL);
+
+    if(returnVal == currentCmd->pid) {
+        currentCmd->finished = true;
+        currentCmd->status = status;
+    }
 }
 
 /*
@@ -265,18 +266,39 @@ job* output_finished_job(job* first_job) {
     return first_job;
 }
 
-void check_if_job_finished(job *first_job, int terminatedChildPid, int status){
+/*
+ * we go through every element in the linked list,
+ * find the correspondent child process and mark
+ * it as finished
+ */
+void mark_child_finish(job *first_job, int terminatedChildPid, int status){
     for (job *jobIter = first_job; jobIter != NULL; jobIter = jobIter->next) {
         for (command *cmdIter = jobIter->cmd; cmdIter != NULL ; cmdIter = cmdIter->next) {
             if(cmdIter->pid != terminatedChildPid)
                 continue;
             //cmdIter->pid == terminatedChildPid
             cmdIter->status = status;
-            if(!(cmdIter->next)){
-                jobIter->finished = true;
-                return;
-            }
+            cmdIter->finished = true;
         }
+    }
+}
+
+/*
+ * we go through every job in the linked list.
+ * For each job, check whether all of its child
+ * processes is finished. If it is, we mark that
+ * job as finished
+ */
+void mark_job_finished(job *first_job) {
+    for (job *jobIter = first_job; jobIter != NULL ; jobIter = jobIter->next) {
+        bool isJobFinish = true;
+        for (command *cmdIter = jobIter->cmd; cmdIter != NULL ; cmdIter = cmdIter->next) {
+            if(cmdIter->finished)
+                continue;
+            isJobFinish = false;
+            break;
+        }
+        jobIter->finished = isJobFinish;
     }
 }
 
@@ -297,7 +319,7 @@ void check_background_job(job *first_job) {
     do{
         terminatedChildPid = waitpid(-1, &status, WNOHANG);
         if(terminatedChildPid > 0)
-            check_if_job_finished(first_job, terminatedChildPid, status);
+            mark_child_finish(first_job, terminatedChildPid, status);
     }while(terminatedChildPid > 0);
 }
 
@@ -308,6 +330,7 @@ int main(int argc, char *argv[])
     // this loop only exit if command is "exit"
     do {
         check_background_job(first_job);
+        mark_job_finished(first_job);
         first_job = output_finished_job(first_job);
 
         char *src = malloc(MAX_SIZE * sizeof(char));
