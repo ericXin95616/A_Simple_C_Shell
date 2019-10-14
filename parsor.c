@@ -8,38 +8,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <fcntl.h>
-#include "phrasor.h"
-
-
-/*
- * Free memory allocate for each command node
- * remember to free itself!
- */
-void _myfree(command *cmd) {
-    assert(cmd->args);
-    if(cmd->args) {
-        int i = 0;
-        while(cmd->args[i]){
-            free(cmd->args[i]);
-            ++i;
-        }
-    }
-    free(cmd->args);
-    free(cmd);
-}
-
-/*
- * Free memory allocate for an array of command
- */
-void myfree(command *header)
-{
-    if(!header)
-        return;
-    for (command *it = header; it != NULL ; it = header) {
-        header = header->next;
-        _myfree(it);
-    }
-}
+#include "parsor.h"
 
 /*
  * replace for  a == '|' || a == '&' || a == '<' || a == '>'
@@ -54,34 +23,6 @@ bool ischar(const char a, const char * list)
             return true;
     }
     return false;
-}
-
-/*
- * initialize a new command node and linked it to the linked list
- * remember to free args[i]! Otherwise, we cannot construct next command
- */
-command* initialize_command(command *header, char **args, int inputfd, int outputfd, bool background, command *prev,
-                        command *next)
-{
-    header = malloc(sizeof(command));
-    header->background = background;
-    header->prev = prev;
-    header->next = next;
-    header->status = -1; // use -1 indicate this value has not been modified
-    header->inputfd = inputfd;
-    header->outputfd = outputfd;
-
-    int argnum = 0;
-    while (args[argnum]) ++argnum;
-    header->args = malloc((argnum+1) * sizeof(char*));
-    for (int i = 0; i < argnum; ++i) {
-        header->args[i] = malloc((strlen(args[i]) + 1) * sizeof(char));
-        strcpy(header->args[i], args[i]);
-        free(args[i]);
-        args[i] = NULL;
-    }
-    header->args[argnum] = NULL;
-    return header;
 }
 
 int get_next_nonspace_char_pos(const char *src, int index)
@@ -135,7 +76,10 @@ void clear_mem(char **args, char *token, command **header) {
     free(args);
     free(token);
     if(header) {
-        myfree(*header);
+        for (command *it = *header; it != NULL ; it = *header) {
+            *header = (*header)->next;
+            _myfree(it);
+        }
         *header = NULL;
     }
 }
@@ -197,8 +141,7 @@ char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
  * we also need to use fopen() to see if we have
  * access to that file
  */
-bool
-check_redirect_sign(command **header, const char *cmd, char *token, const char *delimiters,
+bool check_redirect_sign(command **header, const char *cmd, char *token, const char *delimiters,
                     int *index, char special, int *fd)
 {
     assert(special == '<' || special == '>');
@@ -207,6 +150,16 @@ check_redirect_sign(command **header, const char *cmd, char *token, const char *
     // if nextSpecial is space, we want to find next delimiter
     while(isspace(nextSpecial))
         nextSpecial = cmd[++(*index)];
+
+    // No filename
+    if(!strlen(token)) {
+        if(special == '<')
+            fprintf(stderr, "Error: no input file\n");
+        else
+            fprintf(stderr, "Error: no output file\n");
+        return false;
+    }
+
     // check mislocated error
     if(nextSpecial == '|' && *header) { //command in middle
         if(special == '<')
@@ -223,15 +176,6 @@ check_redirect_sign(command **header, const char *cmd, char *token, const char *
 
     if(nextSpecial == '\0' && *header && special == '<') { // last command in many command
         fprintf(stderr, "Error: mislocated input redirection\n");
-        return false;
-    }
-
-    // No filename
-    if(!strlen(token)) {
-        if(special == '<')
-            fprintf(stderr, "Error: no input file\n");
-        else
-            fprintf(stderr, "Error: no output file\n");
         return false;
     }
 
@@ -288,20 +232,22 @@ bool handle_redirect_sign(command **header, const char *cmd, char *token, char s
  * No need to update index, because there is nothing left in cmd
  */
 bool handle_ampersand(command **header, command **iter, const char *cmd, char **args,
-                      int *inputfd, int *outputfd, int index)
+                      int *inputfd, int *outputfd, int *index)
 {
-    if(!check_ampersand(cmd, index))
+    if(!check_ampersand(cmd, *index))
         return false;
 
     //First command and only one command!
     if(!(*header)) {
-        *header = initialize_command(*header, args, *inputfd, *outputfd, true, NULL, NULL);
+        *header = initialize_command(*header, args, *inputfd, *outputfd, NULL, NULL);
         *iter = *header;
     } else {
         assert(!(*iter)->next);
-        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, true, *iter, NULL);
+        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, *iter, NULL);
         *iter = (*iter)->next; // problem here?
     }
+    //+2 because we want to end loop now
+    (*index) = (*index) + 2;
     //set them back to initial value
     *inputfd = -1;
     *outputfd = -1;
@@ -323,11 +269,11 @@ bool handle_vertical_bar_and_null(command **header, command **iter, const char *
 
     //First command, but we dont know if it is the only one
     if(!(*header)) {
-        *header = initialize_command(*header, args, *inputfd, *outputfd, false, NULL, NULL);
+        *header = initialize_command(*header, args, *inputfd, *outputfd, NULL, NULL);
         *iter = *header;
     } else {
         assert(!(*iter)->next);
-        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, false, *iter, NULL);
+        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, *iter, NULL);
         *iter = (*iter)->next;
     }
     ++(*index);
@@ -338,16 +284,17 @@ bool handle_vertical_bar_and_null(command **header, command **iter, const char *
 }
 
 /*
+ * first we allocate memory for job* header
  * Parse input string / check its vaildity / build command linked list
  * index is updated inside the calling function(special/handle_*).
  * all the dynamic allocated memory will be free using clear_mem().
  * if we successfully build command linked list, we won't free
  * memory allocated for it(passing NULL indicates no need to free).
  */
-bool parse_src_string(const char *cmd, command **header) {
+bool parse_src_string(char *cmd, job **newjob) {
     int index = 0;
     char *delimiters = "|&<>";
-    int mallocSize = (int)strlen(cmd) * sizeof(char);
+    int mallocSize = ((int)strlen(cmd)+1) * sizeof(char);
     char *token = malloc(mallocSize);
     //input/output file descriptor, -1 indicates NULL file descriptor
     int inputfd = -1;
@@ -365,14 +312,16 @@ bool parse_src_string(const char *cmd, command **header) {
      * iter indicates the last element in linked list,
      * convenient for us to insert new element.
      */
+    command *header = NULL;
     command *iter;
+    bool background = false;
     while(index <= strlen(cmd)) {
         // src[index] == special, take next token
         char special = my_strtok(cmd, token, delimiters, &index);
 
         if(!write_back(args, token)){
             fprintf(stderr, "Error: too many process arguments\n");
-            clear_mem(args, token, header);
+            clear_mem(args, token, &header);
             return false;
         }
 
@@ -389,29 +338,32 @@ bool parse_src_string(const char *cmd, command **header) {
          */
         if(!args[0]) {
             fprintf(stderr, "Error: missing command\n");
-            clear_mem(args, token, header);
+            clear_mem(args, token, &header);
             return false;
         }
 
         // depends on different delimiters, we take different actions
         if(special == '<' || special == '>') {
-            if (!handle_redirect_sign(header, cmd, token, special, delimiters, &index, &inputfd, &outputfd)){
-                clear_mem(args, token, header);
+            if (!handle_redirect_sign(&header, cmd, token, special, delimiters, &index, &inputfd, &outputfd)){
+                clear_mem(args, token, &header);
                 return false;
             }
         } else if(special == '&') {
-            if(!handle_ampersand(header, &iter, cmd, args, &inputfd, &outputfd, index)){
-                clear_mem(args, token, header);
+            if(!handle_ampersand(&header, &iter, cmd, args, &inputfd, &outputfd, &index)){
+                clear_mem(args, token, &header);
                 return false;
             }
+            background = true;
         } else if(special == '|' || special == '\0') {
-            if(!handle_vertical_bar_and_null(header, &iter, cmd, args, &inputfd, &outputfd, &index)) {
-                clear_mem(args, token, header);
+            if(!handle_vertical_bar_and_null(&header, &iter, cmd, args, &inputfd, &outputfd, &index)) {
+                clear_mem(args, token, &header);
                 return false;
             }
         }
     }
 
+    //initialize new job here
+    *newjob = initialize_job(*newjob, header, background, cmd);
     // success, no need to free header
     clear_mem(args, token, NULL);
     return true;
