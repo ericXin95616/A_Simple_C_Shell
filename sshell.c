@@ -20,7 +20,7 @@
  * so we must free it at the end
  */
 void execute_pwd(job *first_job) {
-    first_job->finished = true;
+    first_job->cmd->finished = true;
     char *currentDir = NULL;
     currentDir = getcwd(currentDir, MAX_SIZE * sizeof(char));
 
@@ -65,7 +65,7 @@ char * get_dest_dir(char *destDir, const char *filename){
  */
 void execute_cd(job *first_job) {
     // args[0] is "cd", args[1] should be filename
-    first_job->finished = true;
+    first_job->cmd->finished = true;
     char *destDir = NULL;
     destDir = get_dest_dir(destDir, first_job->cmd->args[1]);
 
@@ -87,7 +87,7 @@ void execute_cd(job *first_job) {
  * error message. If it is not, we free everything and quit
  */
 void execute_exit(job *first_job) {
-    first_job->finished = true;
+    first_job->cmd->finished = true;
     if(first_job->next) {
         first_job->cmd->status = 256;
         printf("Error: active jobs still running\n");
