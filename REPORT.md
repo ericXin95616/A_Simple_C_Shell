@@ -353,7 +353,7 @@ check_redirect_sign(command **header, const char *cmd, char *token,
   + if that char is delimiter, returns it
   + if that char is the beginning of a token
   + Copy the token to the dest, now src[*index]is pointing at space or delimiter
-
+  ```C
 char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
     if(ischar(src[*index], delimiters) || src[*index] == '\0')
         return src[(*index)];
@@ -392,11 +392,13 @@ bool handle_vertical_bar_and_null(command **header, command **iter,
 
     //First command, but we dont know if it is the only one
     if(!(*header)) {
-        *header = initialize_command(*header, args, *inputfd, *outputfd, false, NULL, NULL);
+        *header = initialize_command(*header, args, *inputfd, *outputfd, 
+            false, NULL, NULL);
         *iter = *header;
     } else {
         assert(!(*iter)->next);
-        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, false, *iter, NULL);
+        (*iter)->next = initialize_command((*iter)->next, args, *inputfd, 
+            *outputfd, false, *iter, NULL);
         *iter = (*iter)->next;
     }
     ++(*index);
