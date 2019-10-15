@@ -67,7 +67,8 @@ bool check_ampersand(const char *src, int index)
  * Therefore, no need to free header.
  * If not, we need to free it and set it back to NULL
  */
-void clear_mem(char **args, char *token, command **header) {
+void clear_mem(char **args, char *token, command **header)
+{
     int argnum = 0;
     while(args[argnum]){
         free(args[argnum]);
@@ -89,7 +90,8 @@ void clear_mem(char **args, char *token, command **header) {
  * and set it back to NULL.
  * args should be a null-terminated array of string
  */
-bool write_back(char **args, char *token){
+bool write_back(char **args, char *token)
+{
     if(strlen(token) == 0)
         return true;
 
@@ -111,7 +113,8 @@ bool write_back(char **args, char *token){
  * if that char is the beginning of a token
  * we copy that token to the dest, now src[*index] is pointting at space or delimiter
  */
-char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
+char my_strtok(const char *src, char *dest, const char *delimiters, int *index)
+{
     if(ischar(src[*index], delimiters) || src[*index] == '\0')
         return src[(*index)];
     // ignore space, searching next char
@@ -144,7 +147,6 @@ char my_strtok(const char *src, char *dest, const char *delimiters, int *index){
 bool check_redirect_sign(command **header, const char *cmd, char *token, const char *delimiters,
                     int *index, char special, int *fd)
 {
-    assert(special == '<' || special == '>');
     ++(*index);
     char nextSpecial = my_strtok(cmd, token, delimiters, index);
     // if nextSpecial is space, we want to find next delimiter
@@ -242,7 +244,6 @@ bool handle_ampersand(command **header, command **iter, const char *cmd, char **
         *header = initialize_command(*header, args, *inputfd, *outputfd, NULL, NULL);
         *iter = *header;
     } else {
-        assert(!(*iter)->next);
         (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, *iter, NULL);
         *iter = (*iter)->next; // problem here?
     }
@@ -272,7 +273,6 @@ bool handle_vertical_bar_and_null(command **header, command **iter, const char *
         *header = initialize_command(*header, args, *inputfd, *outputfd, NULL, NULL);
         *iter = *header;
     } else {
-        assert(!(*iter)->next);
         (*iter)->next = initialize_command((*iter)->next, args, *inputfd, *outputfd, *iter, NULL);
         *iter = (*iter)->next;
     }
@@ -291,7 +291,8 @@ bool handle_vertical_bar_and_null(command **header, command **iter, const char *
  * if we successfully build command linked list, we won't free
  * memory allocated for it(passing NULL indicates no need to free).
  */
-bool parse_src_string(char *cmd, job **newjob) {
+bool parse_src_string(char *cmd, job **newjob)
+{
     int index = 0;
     char *delimiters = "|&<>";
     int mallocSize = ((int)strlen(cmd)+1) * sizeof(char);

@@ -21,7 +21,8 @@
  * Notice that getcwd will allocate memory if success!
  * so we must free it at the end
  */
-void execute_pwd(job *first_job) {
+void execute_pwd(job *first_job)
+{
     first_job->cmd->finished = true;
     char *currentDir = NULL;
     currentDir = getcwd(currentDir, MAX_SIZE * sizeof(char));
@@ -42,7 +43,8 @@ void execute_pwd(job *first_job) {
  * Notice that we do not need to implement
  * "cd -", "cd ~" commands.
  */
-char * get_dest_dir(char *destDir, const char *filename){
+char * get_dest_dir(char *destDir, const char *filename)
+{
     destDir = getcwd(destDir, MAX_SIZE * sizeof(char));
     // if filename is absolute path, nothing need to be done
     if(filename[0] == '/') {
@@ -65,7 +67,8 @@ char * get_dest_dir(char *destDir, const char *filename){
  * first call get_dest_dir to get absolute path
  * and chdir. Remember to free destDir!
  */
-void execute_cd(job *first_job) {
+void execute_cd(job *first_job)
+{
     // args[0] is "cd", args[1] should be filename
     first_job->cmd->finished = true;
     char *destDir = NULL;
@@ -88,7 +91,8 @@ void execute_cd(job *first_job) {
  * left in the linked list. If that's the case, we should print
  * error message. If it is not, we free everything and quit
  */
-void execute_exit(job *first_job) {
+void execute_exit(job *first_job)
+{
     first_job->cmd->finished = true;
     if(first_job->next) {
         first_job->cmd->status = BUILDIN_FAILURE;
@@ -101,7 +105,8 @@ void execute_exit(job *first_job) {
     exit(EXIT_SUCCESS);
 }
 
-void launch_new_process(command *iter) {
+void launch_new_process(command *iter)
+{
     if(iter->inputfd != -1) {
         dup2(iter->inputfd, STDIN_FILENO);
         close(iter->inputfd);
@@ -122,7 +127,8 @@ void launch_new_process(command *iter) {
  * Neither will they be a part of pipeline commands
  * So we handle them first
  */
-bool execute_buildin_commands(job *first_job) {
+bool execute_buildin_commands(job *first_job)
+{
     if(strcmp(first_job->cmd->args[0], "exit") == 0) {
         execute_exit(first_job);
         return true;
@@ -149,7 +155,8 @@ bool execute_buildin_commands(job *first_job) {
  * it means that child finish, we therefore set the finished
  * flag of command to true.
  */
-void wait_handler(job *first_job, command *currentCmd) {
+void wait_handler(job *first_job, command *currentCmd)
+{
     int returnVal;
     int status = 0;
     if(first_job->background)
@@ -164,13 +171,14 @@ void wait_handler(job *first_job, command *currentCmd) {
 }
 
 /*
- * Execute commands stored in linked list header
+ * Execute jobs stored in linked list header
  * For every command, we first exam whether it is bulletin command
  * If it is, execute them and return, because we can assume bullet command will not in pipeline.
  * If it is not, call execvp to execute them.
  * Notice that when command is exit, we need to free memory and exit right away!
  */
-void execute_commands(job *first_job) {
+void execute_job(job *first_job)
+{
     if(execute_buildin_commands(first_job))
         return;
 
@@ -191,6 +199,8 @@ void execute_commands(job *first_job) {
         } else if(pid > 0){
             iter->pid = pid;
             wait_handler(first_job, iter);
+        } else{
+            perror("fork");
         }
         // close any inputfd or outputfd
         if(iter->inputfd != -1)
@@ -204,10 +214,11 @@ void execute_commands(job *first_job) {
 /*
  * read a single line from stdin
  */
-bool readline(char *src) {
+bool readline(char *src)
+{
     size_t size = MAX_SIZE;
     size_t charsnum = getline(&src, &size, stdin);
-    // TODO: delete this code before handin
+    //This is for test script
     if (!isatty(STDIN_FILENO)) {
         printf("%s", src);
         fflush(stdout);
@@ -223,7 +234,8 @@ bool readline(char *src) {
 /*
  * output execute results
  */
-void output(const char *src, const command *header) {
+void output(const char *src, const command *header)
+{
     fprintf(stderr, "+ completed '%s' ", src);
     for (const command *it = header; it != NULL ; it = it->next) {
         fprintf(stderr, "[%d]", WEXITSTATUS(it->status));
@@ -237,7 +249,8 @@ void output(const char *src, const command *header) {
  * if it is, we output them and release their memory
  * return new pointer to the first_job
  */
-job* output_finished_job(job* first_job) {
+job* output_finished_job(job* first_job)
+{
     if(!first_job)
         return first_job;
 
@@ -273,7 +286,8 @@ job* output_finished_job(job* first_job) {
  * find the correspondent child process and mark
  * it as finished
  */
-void mark_child_finish(job *first_job, int terminatedChildPid, int status){
+void mark_child_finish(job *first_job, int terminatedChildPid, int status)
+{
     for (job *jobIter = first_job; jobIter != NULL; jobIter = jobIter->next) {
         for (command *cmdIter = jobIter->cmd; cmdIter != NULL ; cmdIter = cmdIter->next) {
             if(cmdIter->pid != terminatedChildPid)
@@ -291,7 +305,8 @@ void mark_child_finish(job *first_job, int terminatedChildPid, int status){
  * processes is finished. If it is, we mark that
  * job as finished
  */
-void mark_job_finished(job *first_job) {
+void mark_job_finished(job *first_job)
+{
     for (job *jobIter = first_job; jobIter != NULL ; jobIter = jobIter->next) {
         bool isJobFinish = true;
         for (command *cmdIter = jobIter->cmd; cmdIter != NULL ; cmdIter = cmdIter->next) {
@@ -313,7 +328,8 @@ void mark_job_finished(job *first_job) {
  * if it is not, return value of waitpid will be 0.
  * And we return to the main function
  */
-void check_background_job(job *first_job) {
+void check_background_job(job *first_job)
+{
     if(!first_job)
         return;
     int terminatedChildPid;
@@ -328,7 +344,6 @@ void check_background_job(job *first_job) {
 int main(int argc, char *argv[])
 {
     job *first_job = NULL;
-
     // this loop only exit if command is "exit"
     do {
         check_background_job(first_job);
@@ -346,6 +361,7 @@ int main(int argc, char *argv[])
         job *next_job = NULL;
         if(!parse_src_string(src, &next_job))
             continue;
+
         if(!first_job){
             first_job = next_job;
         } else {
@@ -355,6 +371,6 @@ int main(int argc, char *argv[])
         }
 
         //if command is "exit", it will exit from this function
-        execute_commands(first_job);
+        execute_job(first_job);
     } while(true);
 }
