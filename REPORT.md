@@ -89,7 +89,7 @@
         + Neither will they be a part of pipeline commands
         + There are two different cases
         + the first function is *execute_exit* to handle __exit__
-          + we first check if there is any job eft in the linked list. 
+          + we first check if there is any job left in the linked list. 
           + If true, print error message. Otherwise free everything and quit.
         + the second function is *execute_cd* to handle __cd__
           + first call *get_dest_dir* to get absolute path
