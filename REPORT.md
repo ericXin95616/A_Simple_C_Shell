@@ -56,10 +56,10 @@
   + To read the command, we implement it by some functions. 
   
   ### Functions
-    + *readline*:
-      + read a single line from stdin
-      + if just enter and do not input any command, return false.
-      + if enter any command, modify the char _'\n'_  to _'\0'_ and return true.
+  + *readline*:
+    + read a single line from stdin
+    + if just enter and do not input any command, return false.
+    + if enter any command, modify the char _'\n'_  to _'\0'_ and return true.
   ### Variables
     + *MAX_ARGUMENT_NUM*: maximum number of argument is 16.
 
