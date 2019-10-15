@@ -61,70 +61,70 @@
     + if just enter and do not input any command, return false.
     + if enter any command, modify the char _'\n'_  to _'\0'_ and return true.
   ### Variables
-    + *MAX_ARGUMENT_NUM*: maximum number of argument is 16.
+  + *MAX_ARGUMENT_NUM*: maximum number of argument is 16.
 
 ## Phase 3
   + To parse the command, we implement it by some functions. 
   
   ### Functions
-    + *parse_src_string*:
-      + parse a job(line of input) into command.
-      + use *my_strtok* to read a command until delimiter *"|&<>"*.
-        + use *is_char* to detect char of delimiter
-      + use *write_back* to write the token(if existed) to *args* in __command__
-      + *parse_cmd* helps parsing the command line and saves it in *args*
-      + Returns false if and only if __args[0] == "exit"__.
+  + *parse_src_string*:
+    + parse a job(line of input) into command.
+    + use *my_strtok* to read a command until delimiter *"|&<>"*.
+      + use *is_char* to detect char of delimiter
+    + use *write_back* to write the token(if existed) to *args* in __command__
+    + *parse_cmd* helps parsing the command line and saves it in *args*
+    + Returns false if and only if __args[0] == "exit"__.
 
 ## Phrase 4
   + To execute the buildin commands, we implement it by some functions.
 
   ### Functions
-    + *execute_commands*:
-      + Generally execute a job.
-      + Execute commands stored in linked list header
-      + For every command, we first exam whether it is bulletin command
-      + If it is, since bullet command will not in pipeline, execute and return:
-        + *execute_buildin_commands*
-          + buildin commands will not be called as background commands
-          + Neither will they be a part of pipeline commands
-          + There are two different cases
-          + the first function is *execute_exit* to handle __exit__
-            + we first check if there is any job eft in the linked list. 
-            + If true, print error message. Otherwise free everything and quit.
-          + the second function is *execute_cd* to handle __cd__
-            + first call *get_dest_dir* to get absolute path
-            + then call *chdir* to change directory to that path
-          + the third function is *execute_pwd* to handle __pwd__
-            + call *getcwd* to get current directory
-            + if *getcwd* fail, set status 256 to set WEXITSTATUS(status) to 1.
-      + If it is not, call execvp to execute them.
+  + *execute_commands*:
+    + Generally execute a job.
+    + Execute commands stored in linked list header
+    + For every command, we first exam whether it is bulletin command
+    + If it is, since bullet command will not in pipeline, execute and return:
+      + *execute_buildin_commands*
+        + buildin commands will not be called as background commands
+        + Neither will they be a part of pipeline commands
+        + There are two different cases
+        + the first function is *execute_exit* to handle __exit__
+          + we first check if there is any job eft in the linked list. 
+          + If true, print error message. Otherwise free everything and quit.
+        + the second function is *execute_cd* to handle __cd__
+          + first call *get_dest_dir* to get absolute path
+          + then call *chdir* to change directory to that path
+        + the third function is *execute_pwd* to handle __pwd__
+          + call *getcwd* to get current directory
+          + if *getcwd* fail, set status 256 to set WEXITSTATUS(status) to 1.
+    + If it is not, call execvp to execute them.
 
 ## Phrase 5 and 6
   + Since input and output redirection implementation has lots of similarity.
   + To redirect I/O, we implement functions in the child process.
 
   ### Functions
-    + *launch_new_process*: 
-      + set input file decriptor to STDIN_FILENO if inputfd != -1(as null)
-      + set output file decriptor to STDOUT_FILENO if outputfd != -1(as null)
-    + *handle_redirect_sign* in *parse_src_string*:
-      + After parsing, get file descriptor by *open* then store in __command__
-      + *check_redirect_sign*:
-        + check if redirect sign is valid or not.
+  + *launch_new_process*: 
+    + set input file decriptor to STDIN_FILENO if inputfd != -1(as null)
+    + set output file decriptor to STDOUT_FILENO if outputfd != -1(as null)
+  + *handle_redirect_sign* in *parse_src_string*:
+    + After parsing, get file descriptor by *open* then store in __command__
+    + *check_redirect_sign*:
+      + check if redirect sign is valid or not.
 
 ## Phrase 7
   + To read and execute pipe line, we define functions
 
   ### Functions
-    + *handle_vertical_bar_and_null* in *parse_src_string*:
-      + Read and handle pipe, first check if there is command after it.
-      + If not, command is missing.
-      + Otherwise, create new command and insert it into the linked list.
-      + By *initialize_command*:
-        + constructor of __command__
-    + to implement pipeline after reading and parsing, modify execute function
-    + initialize pipe read and write line, and pipe, and set the corresponding
-    + Lines of code in *execute_commands*:
+  + *handle_vertical_bar_and_null* in *parse_src_string*:
+    + Read and handle pipe, first check if there is command after it.
+    + If not, command is missing.
+    + Otherwise, create new command and insert it into the linked list.
+    + By *initialize_command*:
+      + constructor of __command__
+  + to implement pipeline after reading and parsing, modify execute function
+  + initialize pipe read and write line, and pipe, and set the corresponding
+  + Lines of code in *execute_commands*:
     ```C
     if(iter->next) {
         pipe(fd);
@@ -151,30 +151,30 @@
     }
     ```
   ### Functions
-    + *initialize_job*: 
-      + constructor of struct __job__
-      + allocate memory for newjob and initialize newjob's members' value.
-    + *check_background_job*:
-      + check if any child process finished,
-      + if it is, we check if that means any background job finished.
-      + using *waitpid(-1, &status, WNOHANG);*
-      + flag "WNOHANG" to exam if there is any terminated child process.
-      + if it is, call *mark_child_finish*:
-        + loop and find the correspondent child process and mark as finished.
-      + if it is not, return value of waitpid will be 0.
-      + And then we return to the main function.
-    + *mark_job_finished*:
-      + mark job finished if all child process is marked as finished.
-    + *output_finished_job*:
-      + we go through every job in the linked list
-      + check if the job is finished
-      + if it is, we output them and release their memory
-      + return new pointer to the first_job
-    + *output*:
-      + output execute results
-    + *myfree*:
-      + Free memory allocate for the job.
-    + *_myfree*:
-      + Free memory allocate for each command node and itself.
+  + *initialize_job*: 
+    + constructor of struct __job__
+    + allocate memory for newjob and initialize newjob's members' value.
+  + *check_background_job*:
+    + check if any child process finished,
+    + if it is, we check if that means any background job finished.
+    + using *waitpid(-1, &status, WNOHANG);*
+    + flag "WNOHANG" to exam if there is any terminated child process.
+    + if it is, call *mark_child_finish*:
+      + loop and find the correspondent child process and mark as finished.
+    + if it is not, return value of waitpid will be 0.
+    + And then we return to the main function.
+  + *mark_job_finished*:
+    + mark job finished if all child process is marked as finished.
+  + *output_finished_job*:
+    + we go through every job in the linked list
+    + check if the job is finished
+    + if it is, we output them and release their memory
+    + return new pointer to the first_job
+  + *output*:
+    + output execute results
+  + *myfree*:
+    + Free memory allocate for the job.
+  + *_myfree*:
+    + Free memory allocate for each command node and itself.
 
     
