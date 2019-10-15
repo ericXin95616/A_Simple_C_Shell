@@ -25,8 +25,7 @@ typedef struct command {
     int pid;
     bool finished;
 } command;
-```
-```
+    ```
   + The __job__ struct is a linked list to store a job, a line of command.
   + A __job__ struct includes six members:
     + __command *cmd__: store a linked list of command in that job(line).
@@ -44,8 +43,7 @@ typedef struct job {
     struct job *prev;
     char *src;
 } job;
-   ```
-   ```
+    ```
 
 ## Phase 1
   + We implement the fork+exec+wait structure to run the commands the hard way.
@@ -133,8 +131,7 @@ if(iter->next) {
     iter->outputfd = fd[1];
     iter->next->inputfd = fd[0];
 }
-```
-```
+    ```
     + This file descriptor setting is after phase 5 and 6 because
     + it is implemented in *execute_commands*
 
@@ -144,7 +141,7 @@ if(iter->next) {
   + A job is finished if all command in that line is finished.
   + Job is a linked list, so move to next job in execution we do
   + Piece of code in *execute_commands*:
-  ```c
+    ```c
 if(!first_job){
     first_job = next_job;
 } else {
@@ -152,8 +149,7 @@ if(!first_job){
     next_job->next = first_job;
     first_job = next_job;
 }
-```
-```
+    ```
   ### Functions
     + *initialize_job*: 
       + constructor of struct __job__
@@ -180,5 +176,5 @@ if(!first_job){
       + Free memory allocate for the job.
     + *_myfree*:
       + Free memory allocate for each command node and itself.
-      
+
     
