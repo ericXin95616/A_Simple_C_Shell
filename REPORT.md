@@ -79,7 +79,7 @@
   + To execute the buildin commands, we implement it by some functions.
 
   ### Functions
-  + *execute_commands*:
+  + *execute_job*:
     + Generally execute a job.
     + Execute commands stored in linked list header
     + For every command, we first exam whether it is bulletin command
@@ -150,6 +150,13 @@
         first_job = next_job;
     }
     ```
+   + For any background command, we call waitpid(pid, &status, WNOHANG).
+   + Every time before we print our completion message, we will call 
+   waitpid(-1, &status, WNOHANG) to check if any child process is terminated.
+   + If the return value of that function is the pid of child process,
+   we mark that child process as "finished".
+   + Before we print the completion message of a job, we will check whther
+   that job is finished.
   ### Functions
   + *initialize_job*: 
     + constructor of struct __job__
