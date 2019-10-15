@@ -38,7 +38,8 @@ command *initialize_command(command *header, char **args, int inputfd, int outpu
 /*
  * allocate memory for newjob and initialize newjob's members' value
  */
-job *initialize_job(job *newjob, command *cmd, bool background, char *src) {
+job *initialize_job(job *newjob, command *cmd, bool background, char *src)
+{
     newjob = malloc(sizeof(job));
     newjob->cmd = cmd;
     newjob->background = background;
@@ -53,8 +54,8 @@ job *initialize_job(job *newjob, command *cmd, bool background, char *src) {
  * Free memory allocate for each command node
  * remember to free itself!
  */
-void _myfree(command *cmd) {
-    assert(cmd->args);
+void _myfree(command *cmd)
+{
     if(cmd->args) {
         int i = 0;
         while(cmd->args[i]){
