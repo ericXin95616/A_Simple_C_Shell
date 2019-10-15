@@ -14,17 +14,17 @@
     + __int status__: store the return status for error message.
     + __int pid__: store the Process ID for identifying forked child process.
     + __bool finished__: determine whether the process of this command is done.
-    ```c
-typedef struct command {
-    char **args;
-    int inputfd;
-    int outputfd;
-    struct command *prev;
-    struct command *next;
-    int status;
-    int pid;
-    bool finished;
-} command;
+    ```C
+    typedef struct command {
+        char **args;
+        int inputfd;
+        int outputfd;
+        struct command *prev;
+        struct command *next;
+        int status;
+        int pid;
+        bool finished;
+    } command;
     ```
   + The __job__ struct is a linked list to store a job, a line of command.
   + A __job__ struct includes six members:
@@ -34,15 +34,15 @@ typedef struct command {
     + __struct job *prev__:link to the previous job in the background case.
     + __struct job *next__:link to the next job in the background case.
     + __char *src__:store the whole job(line) in string for ending message.
-    ```c
-typedef struct job {
-    command *cmd;
-    bool background;
-    bool finished;
-    struct job *next;
-    struct job *prev;
-    char *src;
-} job;
+    ```C
+    typedef struct job {
+        command *cmd;
+        bool background;
+        bool finished;
+        struct job *next;
+        struct job *prev;
+        char *src;
+    } job;
     ```
 
 ## Phase 1
@@ -125,12 +125,12 @@ typedef struct job {
     + to implement pipeline after reading and parsing, modify execute function
     + initialize pipe read and write line, and pipe, and set the corresponding
     + Lines of code in *execute_commands*:
-    ```c
-if(iter->next) {
-    pipe(fd);
-    iter->outputfd = fd[1];
-    iter->next->inputfd = fd[0];
-}
+    ```C
+    if(iter->next) {
+        pipe(fd);
+        iter->outputfd = fd[1];
+        iter->next->inputfd = fd[0];
+    }
     ```
     + This file descriptor setting is after phase 5 and 6 because
     + it is implemented in *execute_commands*
@@ -141,14 +141,14 @@ if(iter->next) {
   + A job is finished if all command in that line is finished.
   + Job is a linked list, so move to next job in execution we do
   + Piece of code in *execute_commands*:
-    ```c
-if(!first_job){
-    first_job = next_job;
-} else {
-    first_job->prev = next_job;
-    next_job->next = first_job;
-    first_job = next_job;
-}
+    ```C
+    if(!first_job){
+        first_job = next_job;
+    } else {
+        first_job->prev = next_job;
+        next_job->next = first_job;
+        first_job = next_job;
+    }
     ```
   ### Functions
     + *initialize_job*: 
